@@ -4,18 +4,21 @@ const { faunaFetch } = require("./utils/fauna");
 exports.handler = async (event) => {
 	const { user } = JSON.parse(event.body);
 
-	// Create a new customer in Stripe
-	const customer = await stripe.customers.create({ email: user.email });
+	try {
+		// Create a new customer in Stripe
+		const customer = await stripe.customers.create({
+			email: user.email,
+		});
 
-	// Subscribe the new customer to the free plan
-	await stripe.subscriptions.create({
-		customer: customer.id,
-		items: [{ price: process.env.STRIPE_DEFAULT_PRICE_PLAN }],
-	});
+		// Subscribe the new customer to the free plan
+		await stripe.subscriptions.create({
+			customer: customer.id,
+			items: [{ price: process.env.STRIPE_DEFAULT_PRICE_PLAN }],
+		});
 
-	// store the Netlify and Stripe IDs in Fauna
-	await faunaFetch({
-		query: `
+		// store the Netlify and Stripe IDs in Fauna
+		await faunaFetch({
+			query: `
 			mutation ($netlifyID: ID!, $stripeID: ID!) {
 				createUser(data: { netlifyID: $netlifyID, stripeID: $stripeID }) {
 					netlifyID
@@ -23,18 +26,26 @@ exports.handler = async (event) => {
 				}
 			}
 		`,
-		variables: {
-			netlifyID: user.id,
-			stripeID: customer.id,
-		},
-	});
-
-	return {
-		statusCode: 200,
-		body: JSON.stringify({
-			app_metadata: {
-				roles: ["free"],
+			variables: {
+				netlifyID: user.id,
+				stripeID: customer.id,
 			},
-		}),
-	};
+		});
+
+		return {
+			statusCode: 200,
+			body: JSON.stringify({
+				app_metadata: {
+					roles: ["free"],
+				},
+			}),
+		};
+	} catch (error) {
+		return {
+			statusCode: 400,
+			body: JSON.stringify({
+				error: error,
+			}),
+		};
+	}
 };
